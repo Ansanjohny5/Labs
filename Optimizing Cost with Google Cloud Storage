@@ -1,6 +1,6 @@
 
-export REGION=us-central1
-
+echo -e "Enter your region:"
+read REGION
 
 # Enable required services
 gcloud services enable cloudscheduler.googleapis.com
