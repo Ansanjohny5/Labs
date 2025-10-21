@@ -1,0 +1,131 @@
+#!/bin/bash
+# ------------------------------------------------------------
+#  Google Cloud Run + Pub/Sub Lab Automation Script (Clean Version)
+# ------------------------------------------------------------
+
+clear
+
+# ---------------------- COLOR SETUP ----------------------
+BLACK=$(tput setaf 0)
+RED=$(tput setaf 1)
+GREEN=$(tput setaf 2)
+YELLOW=$(tput setaf 3)
+BLUE=$(tput setaf 4)
+MAGENTA=$(tput setaf 5)
+CYAN=$(tput setaf 6)
+WHITE=$(tput setaf 7)
+BOLD=$(tput bold)
+RESET=$(tput sgr0)
+
+TEXT_COLORS=($RED $GREEN $YELLOW $BLUE $MAGENTA $CYAN)
+BG_COLORS=($(tput setab 1) $(tput setab 2) $(tput setab 3) $(tput setab 4) $(tput setab 5) $(tput setab 6))
+RANDOM_TEXT_COLOR=${TEXT_COLORS[$RANDOM % ${#TEXT_COLORS[@]}]}
+RANDOM_BG_COLOR=${BG_COLORS[$RANDOM % ${#BG_COLORS[@]}]}
+
+# ---------------------- SCRIPT START ----------------------
+echo "${RANDOM_BG_COLOR}${RANDOM_TEXT_COLOR}${BOLD}Starting Execution${RESET}"
+
+# 1️⃣ Set Compute Zone & Region
+echo "${BOLD}${BLUE}Setting Compute Zone & Region${RESET}"
+export ZONE=$(gcloud compute project-info describe --format="value(commonInstanceMetadata.items[google-compute-default-zone])")
+export REGION=$(gcloud compute project-info describe --format="value(commonInstanceMetadata.items[google-compute-default-region])")
+gcloud config set compute/zone "$ZONE"
+gcloud config set compute/region "$REGION"
+
+# 2️⃣ Create Pub/Sub Topic
+echo "${BOLD}${GREEN}Creating Pub/Sub topic 'new-lab-report'${RESET}"
+gcloud pubsub topics create new-lab-report
+
+# 3️⃣ Enable Cloud Run API
+echo "${BOLD}${YELLOW}Enabling Cloud Run API${RESET}"
+gcloud services enable run.googleapis.com
+
+# 4️⃣ Clone Repository
+echo "${BOLD}${MAGENTA}Cloning pet-theory repository${RESET}"
+git clone https://github.com/rosera/pet-theory.git
+
+# ---------------------- LAB SERVICE ----------------------
+echo "${BOLD}${CYAN}Setting up lab-service${RESET}"
+cd pet-theory/lab05/lab-service || exit
+npm install express body-parser @google-cloud/pubsub
+
+# Download lab-service files silently
+BASE_URL="https://raw.githubusercontent.com/Cloud-Wala-Banda/Labs-Solutions/refs/heads/main/Build%20a%20Resilient%2C%20Asynchronous%20System%20with%20Cloud%20Run%20and%20PubSub/lab-service"
+rm package.json
+for FILE in package.json index.js Dockerfile deploy.sh post-reports.sh; do
+  curl -s -O "${BASE_URL}/${FILE}"
+done
+
+chmod +x deploy.sh && ./deploy.sh
+
+# Run post-reports
+export LAB_REPORT_SERVICE_URL=$(gcloud run services describe lab-report-service --platform managed --region "$REGION" --format="value(status.address.url)")
+chmod +x post-reports.sh && ./post-reports.sh
+
+# ---------------------- EMAIL SERVICE ----------------------
+echo "${BOLD}${GREEN}Setting up email-service${RESET}"
+cd ~/pet-theory/lab05/email-service || exit
+npm install express body-parser
+
+EMAIL_URL="https://raw.githubusercontent.com/Cloud-Wala-Banda/Labs-Solutions/refs/heads/main/Build%20a%20Resilient%2C%20Asynchronous%20System%20with%20Cloud%20Run%20and%20PubSub/email-service"
+rm package.json
+for FILE in package.json index.js Dockerfile deploy.sh; do
+  curl -s -O "${EMAIL_URL}/${FILE}"
+done
+
+chmod +x deploy.sh && ./deploy.sh
+
+# IAM & Pub/Sub Configuration
+echo "${BOLD}${CYAN}Configuring IAM and Pub/Sub${RESET}"
+gcloud iam service-accounts create pubsub-cloud-run-invoker --display-name "PubSub Cloud Run Invoker"
+
+gcloud run services add-iam-policy-binding email-service \
+  --member="serviceAccount:pubsub-cloud-run-invoker@$GOOGLE_CLOUD_PROJECT.iam.gserviceaccount.com" \
+  --role="roles/run.invoker" \
+  --region "$REGION" \
+  --project="$DEVSHELL_PROJECT_ID" \
+  --platform managed
+
+PROJECT_NUMBER=$(gcloud projects list --filter="qwiklabs-gcp" --format="value(PROJECT_NUMBER)")
+gcloud projects add-iam-policy-binding "$GOOGLE_CLOUD_PROJECT" \
+  --member="serviceAccount:service-$PROJECT_NUMBER@gcp-sa-pubsub.iam.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountTokenCreator"
+
+EMAIL_SERVICE_URL=$(gcloud run services describe email-service --platform managed --region="$REGION" --format="value(status.address.url)")
+gcloud pubsub subscriptions create email-service-sub \
+  --topic new-lab-report \
+  --push-endpoint="$EMAIL_SERVICE_URL" \
+  --push-auth-service-account="pubsub-cloud-run-invoker@$GOOGLE_CLOUD_PROJECT.iam.gserviceaccount.com"
+
+~/pet-theory/lab05/lab-service/post-reports.sh
+
+# ---------------------- SMS SERVICE ----------------------
+echo "${BOLD}${YELLOW}Setting up sms-service${RESET}"
+cd ~/pet-theory/lab05/sms-service || exit
+npm install express body-parser
+
+SMS_URL="https://raw.githubusercontent.com/Cloud-Wala-Banda/Labs-Solutions/refs/heads/main/Build%20a%20Resilient%2C%20Asynchronous%20System%20with%20Cloud%20Run%20and%20PubSub/sms-service"
+rm package.json
+for FILE in package.json index.js Dockerfile deploy.sh; do
+  curl -s -O "${SMS_URL}/${FILE}"
+done
+
+chmod +x deploy.sh && ./deploy.sh
+
+# ---------------------- SUCCESS MESSAGE ----------------------
+echo
+MESSAGES=(
+  "${GREEN}🎉 Congratulations! You’ve completed the lab successfully!${RESET}"
+  "${CYAN}✅ Great job! Everything deployed perfectly!${RESET}"
+  "${YELLOW}🌟 Excellent work! You mastered Cloud Run & Pub/Sub!${RESET}"
+)
+echo -e "${BOLD}${MESSAGES[$RANDOM % ${#MESSAGES[@]}]}"
+echo
+
+# ---------------------- CLEANUP ----------------------
+cd ~ || exit
+echo "${BOLD}${RED}Cleaning temporary files...${RESET}"
+for file in gsp* arc* shell*; do
+  [[ -f "$file" ]] && rm "$file" && echo "File removed: $file"
+done
+echo "${BOLD}${GREEN}Cleanup complete!${RESET}"
