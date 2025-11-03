@@ -1,0 +1,133 @@
+#!/bin/bash
+clear
+
+# Step 1: Assigning Projects
+echo "Starting Execution"
+echo "Assigning Projects..."
+
+assign_projects() {
+  PROJECT_LIST=$(gcloud projects list --format="value(projectId)")
+
+  echo -n "Please Enter the PROJECT_2 ID: "
+  read PROJECT_2
+
+  if [[ ! "$PROJECT_LIST" =~ (^|[[:space:]])"$PROJECT_2"($|[[:space:]]) ]]; then
+    echo "Invalid project ID. Please enter a valid project ID from the list."
+    return 1
+  fi
+
+  PROJECT_1=$(echo "$PROJECT_LIST" | grep -v "^$PROJECT_2$" | head -n 1)
+
+  if [[ -z "$PROJECT_1" ]]; then
+    echo "No other project available to assign to PROJECT_1."
+    return 1
+  fi
+
+  export PROJECT_1
+  export PROJECT_2
+
+  echo
+  echo "PROJECT_1 has been set to: $PROJECT_1"
+  echo "PROJECT_2 has been set to: $PROJECT_2"
+}
+
+assign_projects
+
+# Step 2: Set gcloud project
+echo "Setting gcloud project to $PROJECT_2..."
+gcloud config set project "$PROJECT_2"
+
+# Step 3: Get the zone and create a VM instance
+echo "Creating a VM instance in the project zone..."
+export ZONE=$(gcloud compute project-info describe \
+  --format="value(commonInstanceMetadata.items[google-compute-default-zone])")
+
+gcloud compute instances create instance2 \
+  --zone="$ZONE" \
+  --machine-type=e2-medium
+
+echo
+echo "Click here to monitor metrics:"
+echo "https://console.cloud.google.com/monitoring/settings/metric-scope?project=$PROJECT_2"
+
+# Step 4: Check progress
+check_progress() {
+  while true; do
+    echo
+    read -p "Have you created Group DemoGroup & Uptime check 'DemoGroup uptime check'? (Y/N): " user_input
+    case "$user_input" in
+      [Yy]*) echo "Great! Proceeding..."; break ;;
+      [Nn]*) echo "Please create the group and then press Y to continue." ;;
+      *) echo "Invalid input. Please enter Y or N." ;;
+    esac
+  done
+}
+
+check_progress
+
+# Step 5: Create monitoring policy JSON file
+echo "Creating monitoring policy JSON file..."
+cat > awesome.json <<EOF
+{
+  "displayName": "Uptime Check Policy",
+  "userLabels": {},
+  "conditions": [
+    {
+      "displayName": "VM Instance - Check passed",
+      "conditionAbsent": {
+        "filter": "resource.type = \"gce_instance\" AND metric.type = \"monitoring.googleapis.com/uptime_check/check_passed\" AND metric.labels.check_id = \"demogroup-uptime-check-f-UeocjSHdQ\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "300s",
+            "crossSeriesReducer": "REDUCE_NONE",
+            "perSeriesAligner": "ALIGN_FRACTION_TRUE"
+          }
+        ],
+        "duration": "300s",
+        "trigger": { "count": 1 }
+      }
+    }
+  ],
+  "alertStrategy": {},
+  "combiner": "OR",
+  "enabled": true,
+  "notificationChannels": [],
+  "severity": "SEVERITY_UNSPECIFIED"
+}
+EOF
+
+# Step 6: Create monitoring policy
+echo "Creating monitoring policy..."
+gcloud alpha monitoring policies create --policy-from-file="awesome.json"
+
+# Step 7: Random congratulatory message
+random_congrats() {
+  MESSAGES=(
+    "Congratulations! You’ve completed the lab successfully!"
+    "Well done! Your hard work paid off!"
+    "Excellent job! Keep up the progress!"
+    "Fantastic effort! You’ve done great!"
+    "Awesome! You’ve reached the goal!"
+  )
+  RANDOM_INDEX=$((RANDOM % ${#MESSAGES[@]}))
+  echo
+  echo "${MESSAGES[$RANDOM_INDEX]}"
+}
+
+random_congrats
+echo
+
+# Step 8: Clean up files
+cd
+remove_files() {
+  for file in *; do
+    if [[ "$file" == gsp* || "$file" == arc* || "$file" == shell* ]]; then
+      if [[ -f "$file" ]]; then
+        rm "$file"
+        echo "File removed: $file"
+      fi
+    fi
+  done
+}
+
+remove_files
