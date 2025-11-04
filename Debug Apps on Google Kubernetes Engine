@@ -1,29 +1,75 @@
 #!/bin/bash
 
-clear
+# Enhanced Color Definitions
+BLACK=$'\033[0;90m'
+RED=$'\033[0;91m'
+GREEN=$'\033[0;92m'
+YELLOW=$'\033[0;93m'
+BLUE=$'\033[0;94m'
+MAGENTA=$'\033[0;95m'
+CYAN=$'\033[0;96m'
+WHITE=$'\033[0;97m'
+
+BG_BLACK=`tput setab 0`
+BG_RED=`tput setab 1`
+BG_GREEN=`tput setab 2`
+BG_YELLOW=`tput setab 3`
+BG_BLUE=`tput setab 4`
+BG_MAGENTA=`tput setab 5`
+BG_CYAN=`tput setab 6`
+BG_WHITE=`tput setab 7`
+
+BOLD=`tput bold`
+RESET=`tput sgr0`
 
 
-read -p "Enter your region: " REGION
-gcloud config set compute/zone "$REGION"
+echo "${BLUE}${BOLD}⚡ Initializing Microservices Monitoring Setup...${RESET}"
+echo
+read -p "Enter your zone (e.g. us-central1-a): " ZONE
+# Environment Setup
+echo "${GREEN}${BOLD}▬▬▬▬▬▬▬▬▬ ENVIRONMENT CONFIGURATION ▬▬▬▬▬▬▬▬▬${RESET}"
+echo "${YELLOW}Setting compute zone to ${WHITE}${BOLD}$ZONE${RESET}"
+gcloud config set compute/zone $ZONE
 
 export PROJECT_ID=$(gcloud info --format='value(config.project)')
+echo "${YELLOW}Project ID: ${WHITE}${BOLD}$PROJECT_ID${RESET}"
+echo
 
-gcloud container clusters get-credentials central --zone "$REGION"
+# Cluster Configuration
+echo "${GREEN}${BOLD}▬▬▬▬▬▬▬▬▬ CLUSTER CONFIGURATION ▬▬▬▬▬▬▬▬▬${RESET}"
+echo "${YELLOW}Getting cluster credentials...${RESET}"
+gcloud container clusters get-credentials central --zone $ZONE
+echo "${GREEN}✅ Cluster credentials configured!${RESET}"
+echo
 
+# Microservices Deployment
+echo "${GREEN}${BOLD}▬▬▬▬▬▬▬▬▬ MICROSERVICES DEPLOYMENT ▬▬▬▬▬▬▬▬▬${RESET}"
+echo "${YELLOW}Cloning microservices demo repository...${RESET}"
 git clone https://github.com/xiangshen-dk/microservices-demo.git
-cd microservices-demo || exit
+cd microservices-demo
 
+echo "${YELLOW}Deploying microservices...${RESET}"
 kubectl apply -f release/kubernetes-manifests.yaml
-
+echo "${GREEN}✅ Microservices deployed successfully!${RESET}"
+echo "${YELLOW}Waiting 30 seconds for services to initialize...${RESET}"
 sleep 30
+echo
 
+# Monitoring Setup
+echo "${GREEN}${BOLD}▬▬▬▬▬▬▬▬▬ MONITORING CONFIGURATION ▬▬▬▬▬▬▬▬▬${RESET}"
+echo "${YELLOW}Creating Error Rate SLI metric...${RESET}"
 gcloud logging metrics create Error_Rate_SLI \
   --description="Error rate for recommendationservice" \
-  --log-filter='resource.type="k8s_container" severity=ERROR labels."k8s-pod/app": "recommendationservice"'
-
+  --log-filter="resource.type=\"k8s_container\" severity=ERROR labels.\"k8s-pod/app\": \"recommendationservice\""
+echo "${GREEN}✅ Error Rate SLI metric created!${RESET}"
+echo "${YELLOW}Waiting 30 seconds for metric to propagate...${RESET}"
 sleep 30
+echo
 
-cat > awesome.json <<EOF
+# Alert Policy Creation
+echo "${GREEN}${BOLD}▬▬▬▬▬▬▬▬▬ ALERT POLICY SETUP ▬▬▬▬▬▬▬▬▬${RESET}"
+echo "${YELLOW}Creating alert policy configuration...${RESET}"
+cat > awesome.json <<EOF_END
 {
   "displayName": "Error Rate SLI",
   "userLabels": {},
@@ -56,15 +102,18 @@ cat > awesome.json <<EOF
   "notificationChannels": [],
   "severity": "SEVERITY_UNSPECIFIED"
 }
-EOF
+EOF_END
 
+echo "${YELLOW}Creating monitoring policy...${RESET}"
 gcloud alpha monitoring policies create --policy-from-file="awesome.json"
+echo "${GREEN}✅ Alert policy created successfully!${RESET}"
+echo
+
+# Completion Message
+echo "${BG_GREEN}${BOLD}╔════════════════════════════════════════════════════════╗${RESET}"
+echo "${BG_GREEN}${BOLD}          MONITORING TUTORIAL COMPLETE!    ${RESET}"
+echo "${BG_GREEN}${BOLD}╚════════════════════════════════════════════════════════╝${RESET}"
+echo
 
 echo
-echo "======================================================="
-echo "              LAB COMPLETED SUCCESSFULLY!              "
-echo "======================================================="
-echo
-echo "YouTube: https://www.youtube.com/@ansanjohny653/videos"
-echo "Don't forget to Like, Share and Subscribe for more videos!"
-echo
+echo "${MAGENTA}${BOLD}📊 Happy monitoring your microservices on Google Cloud!${RESET}"
