@@ -81,5 +81,5 @@ echo "${PINK_TEXT}${BOLD_TEXT}╔═══════════════�
 echo "${PINK_TEXT}${BOLD_TEXT}              Lab Completed Successfully!               ${RESET_FORMAT}"
 echo "${PINK_TEXT}${BOLD_TEXT}╚════════════════════════════════════════════════════════╝${RESET_FORMAT}"
 echo
-echo -e "${RED_TEXT}${BOLD_TEXT}Subscribe our Channel:${RESET_FORMAT} ${BLUE_TEXT}${BOLD_TEXT}https://www.youtube.com/@TechCode9${RESET_FORMAT}"
+echo -e "${RED_TEXT}${BOLD_TEXT}Subscribe our Channel:${RESET_FORMAT} "
 echo
